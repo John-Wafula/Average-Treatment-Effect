@@ -1,0 +1,193 @@
+---
+title: "Problem set 4"
+author: ".."
+date: "12/3/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+library(haven)
+data<-read_dta("C:/Users/Admin/Downloads/442745064_OHIE_7765814812907564.dta")
+head(data)
+```
+
+```{r}
+param <- c(8,.5,.28,1500,0.9,0.01,0.05,0.05,0.05,0.1)
+names(param) <- c("barmu","sigma2mu","sigma2U","barY","rho","theta","sigma2epsilon","sigma2eta","delta","baralpha")
+set.seed(1234)
+N <-1000
+mu <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]))
+UB <- rnorm(N,0,sqrt(param["sigma2U"]))
+yB <- mu + UB 
+YB <- exp(yB)
+Ds <- rep(0,N)
+Ds[YB<=param["barY"]] <- 1 
+epsilon <- rnorm(N,0,sqrt(param["sigma2epsilon"]))
+eta<- rnorm(N,0,sqrt(param["sigma2eta"]))
+U0 <- param["rho"]*UB + epsilon
+y0 <- mu +  U0 + param["delta"]
+alpha <- param["baralpha"]+  param["theta"]*mu + eta
+y1 <- y0+alpha
+Y0 <- exp(y0)
+Y1 <- exp(y1)
+```
+
+```{r}
+delta.y.ate <- function(param){
+  return(param["baralpha"]+param["theta"]*param["barmu"])
+}
+delta.y.tt <- function(param){
+  return(param["baralpha"]+param["theta"]*param["barmu"]-param["theta"]*((param["sigma2mu"]*dnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"]))))/(sqrt(param["sigma2mu"]+param["sigma2U"])*pnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"]))))))
+}
+```
+
+```{r}
+# randomized allocation of 50% of individuals
+Rs <- runif(N)
+R <- ifelse(Rs<=.5,1,0)
+y <- y1*R+y0*(1-R)
+Y <- Y1*R+Y0*(1-R)
+```
+
+```{r}
+intent.t.effects <- mean(y[R==1])-mean(y[R==0])
+intent.t.effects
+```
+
+As seen most of the variables among the four chosen variables experience an average amount of the treatment effects
+
+## Part b
+
+```{r}
+library(ri)
+## Rejected randomization scheme: reject if and only if there is significant imbalance
+
+X <- c(1:200)
+
+randfun <- function() {
+  teststat <- -1
+	while (teststat < 0.05) {
+		Zri <- sample(c(rep(0,180),rep(1,20))) # imbalanced design
+		fstat <- summary(lm(Zri~X))$fstatistic
+		teststat <- pf(fstat[1],fstat[2],fstat[3],lower.tail=FALSE)  # extract F-test p-value
+			}
+	return(Zri)
+}
+perms <- genperms.custom(numiter=10000, randfun=randfun) # generate permutations
+probs <- genprob(perms) # generate approximate probabilities from permutation matrix
+cor(probs,(X-mean(X))^2) # observations with extreme X are less likely to be treated
+
+```
+
+## Part C
+
+```{r}
+library(AER)
+data("CigarettesSW")
+# compute real per capita prices
+CigarettesSW$rprice <- with(CigarettesSW, price / cpi)
+
+#  compute the sales tax
+CigarettesSW$salestax <- with(CigarettesSW, (taxs - tax) / cpi)
+
+# check the correlation between sales tax and price
+cor(CigarettesSW$salestax, CigarettesSW$price)
+# generate a subset for the year 1995
+c1995 <- subset(CigarettesSW, year == "1995")
+# perform the first stage regression
+cig_s1 <- lm(log(rprice) ~ salestax, data = c1995)
+
+coeftest(cig_s1, vcov = vcovHC, type = "HC1")
+```
+Ther instrument of assignment to treatment is not a strong for actual medicaid treatment.This is because the p-values are all significant
+
+## Part D
+
+```{r}
+library(ri)
+y <- c(8,6,2,0,3,1,1,1,2,2,0,1,0,2,2,4,1,1)
+Z <- c(1,1,0,0,1,1,0,0,1,1,1,1,0,0,1,1,0,0)
+cluster <- c(1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9)
+block <- c(rep(1,4),rep(2,6),rep(3,8))
+perms <- genperms(Z,blockvar=block, clustvar=cluster) # all possible permutations
+probs <- genprobexact(Z,blockvar=block, clustvar=cluster) # probability of treatment
+ate <- estate(y,Z,prob=probs) # estimate the ATE
+## Conduct Sharp Null Hypothesis Test of Zero Effect for Each Unit
+Ys <- genouts(y,Z,ate=0) # generate potential outcomes under sharp null of no effect
+distout <- gendist(Ys,perms, prob=probs) # generate sampling dist. under sharp null
+dispdist(distout, ate) # display characteristics of sampling dist. for inference
+## Generate Sampling Distribution Around Estimated ATE
+Ys <- genouts(y,Z,ate=ate) ## generate potential outcomes under tau = ATE
+distout <- gendist(Ys,perms, prob=probs) # generate sampling dist. under tau = ATE
+dispdist(distout, ate) ## display characteristics of sampling dist. for inference
+```
+
+There is a significant effect on both the results from question E the current results have a slightly higher values
+
+## Part e
+
+the simplest approach as seen in our calculation when trying to determine is to take the binary variableone of the assumptions is that the regression model was not as neccessary for the procedure and the other is that it is possible to uncover the effects of the regression on Question E even though the model is non-linear.
+
+## Question 4
+
+
+```{r}
+data1<-read_dta("C:/Users/Admin/Downloads/442745064_bases_replication_final_1386782159679176.dta")
+head(data1)
+```
+## Part A
+
+```{r}
+y <- c(8,6,2,0,3,1,1,1,2,2,0,1,0,2,2,4,1,1)
+Z <- c(1,1,0,0,1,1,0,0,1,1,1,1,0,0,1,1,0,0)
+cluster <- c(1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9)
+block <- c(rep(1,4),rep(2,6),rep(3,8))
+perms <- genperms(Z,blockvar=block, clustvar=cluster) # all possible permutations
+probs <- genprobexact(Z,blockvar=block, clustvar=cluster) # probability of treatment
+ate <- estate(y,Z,prob=probs) # estimate the ATE
+## Conduct Sharp Null Hypothesis Test of Zero Effect for Each Unit
+Ys <- genouts(y,Z,ate=0) # generate potential outcomes under sharp null of no effect
+distout <- gendist(Ys,perms, prob=probs) # generate sampling dist. under sharp null
+dispdist(distout, ate) # display characteristics of sampling dist. for inference
+## Generate Sampling Distribution Around Estimated ATE
+Ys <- genouts(y,Z,ate=ate) ## generate potential outcomes under tau = ATE
+distout <- gendist(Ys,perms, prob=probs) # generate sampling dist. under tau = ATE
+dispdist(distout, ate) ## display characteristics of sampling dist. for inference
+```
+
+The basis variables do not change over time it does is a unit constant factor,however te loged military variables changes with time,the authors assume that everything is constant about the military aid allocation yet according to the analysis there is significant difference.
+
+## Part b
+
+the author is under the assumption that the individual specific effects of the military aid are directly correlated with the other variables,he is also under the assumtion that the randon effec estimatir is more efficient than the fixed effect estimator.
+
+
+## Part c
+
+```{r}
+y <- c(8,6,2,0,3,1,1,1,2,2,0,1,0,2,2,4,1,1)
+Z <- c(1,1,0,0,1,1,0,0,1,1,1,1,0,0,1,1,0,0)
+cluster <- c(1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9)
+block <- c(rep(1,4),rep(2,6),rep(3,8))
+probs <- genprobexact(Z,block,cluster) # generate probability of assignment
+ate <- estate(y,Z,prob=probs) # estimate the ATE; estimated ATE=2
+```
+
+```{r}
+ate
+```
+
+
+```{r}
+y <- c(8,6,2,0,3,1,1,1,2,2,0,1,0) 
+Z <- c(1,1,0,0,1,1,0,0,1,1,1,1,0)
+
+perms <- genperms(Z) ## all possible permutations of assignment to treatment
+probs <- genprobexact(Z) ## assuming complete randomization
+
+c(invert.ci(y,Z,probs,perms,0.025),invert.ci(y,Z,probs,perms,0.975)) ## 95% CI
+```
+
+The confidence intervals fall blow zero which is good
